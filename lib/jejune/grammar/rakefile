@@ -1,0 +1,29 @@
+#!/usr/bin/ruby
+# encoding: utf-8
+establish 'standard'
+
+gem 'antlr3'
+
+GRAMMAR_DIR = "lib/jejune/grammar"
+RENAME = YAML.load( <<-END )
+  Jejune.rb: tree.rb
+  JejuneParser.rb: parser.rb
+  JejuneLexer.rb: lexer.rb
+END
+
+parser_lib = File.join( GRAMMAR_DIR, 'parser.rb' )
+grammars = %w( Jejune.g JejuneTree.g ).map { | i | File.join( GRAMMAR_DIR, i ) }
+
+file( parser_lib => grammars ) do
+  require 'antlr3/task'
+  cd GRAMMAR_DIR do
+    tasks = ANTLR3::CompileTask.define( 'Jejune.g', 'JejuneTree.g' )
+    tasks.compile!
+    for src, dest in RENAME
+      mv( src, dest )
+    end
+  end
+end
+
+desc( "Generate the grammar recognition libraries from the ANTLR grammars" )
+task( :grammar => parser_lib )

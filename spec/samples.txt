@@ -1,0 +1,51 @@
+<=[ Strings ]=>
+`
+| <body>
+|   <p>JavaScript wants your strings to sit on a single line.</p>
+| </body>
+`
+---
+"What's so damn terrible about\
+ multiple-line strings, JavaScript?
+huh?"
+---
+"interpolate #{ values.join( "" ) } with braces"
+---
+'do not interpolate in #{ single } quotes'
+---
+%q(<a href="javascript:void(0);">click me</a>)
+---
+%w( aquamarine turquoise burnt\ sienna  )
+---
+"\n\t\r\0\xFF\"\'\\"
+---
+'\n\t\r\0\xFF\"\'\\'
+---
+%y(
+a: 1
+b: 2
+)
+---
+"abc\#{ d }e"
+---
+@count = 0
+---
+var x = @to_s()
+---
+var i = 0
+until ( i > 5 ) {
+  i++
+}
+---
+unless ( text.match( /^\w+$/ ) ) throw( new ArgumentError( "bad name" ) )
+---
+action = ->(x) { x + 1 }
+---
+[ 1, 2, 3 ].map { | i | i * i }
+---
+new Ajax.Request( '/your/url',
+  type: 'GET',
+  onSuccess ->( transport ) {
+    transport.headerJSON
+  }
+)

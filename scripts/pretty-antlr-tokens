@@ -1,0 +1,50 @@
+#!/usr/bin/ruby-1.9
+# encoding: utf-8
+#
+# author: Kyle Yetter
+#
+
+QUOTE_RX  = %r( ' (?: [^\\'] | \\ . )* '   )mx
+CMT_RX    = %r( // [^\n]* \n | /\* .*? \*/ )mx
+
+TOKENS_RX = %r(
+  (?<str> #{ QUOTE_RX } ){0}
+  (?<cmt> #{ CMT_RX }   ){0}
+  (?<rest> [^'/\}]+     ){0}
+  
+  tokens \s+ \{ (?<content> (?: \g<str> | \g<cmt> | \g<rest> )* ) \}
+)mx
+
+require 'text'
+
+def pretty( source )
+  if source.match( TOKENS_RX )
+    before, tokens, after = $`, $~[ :content ], $'
+    
+    tokens.gsub!( CMT_RX, '' )
+    tokens = tokens.scan( %r<(\w+)\s*(?:=\s*(#{ QUOTE_RX }))?;> )
+    tokens.sort!.map! { | pr | pr.compact.join( '=' ) << ';' }
+    tokens = Text::ColumnList.new( tokens, :width_limit => 78 ).to_s
+    tokens = tokens.split( "\n" ).map { | ln | '  ' << ln.strip }.join( "\n" )
+    
+    return( before << "tokens {\n" << tokens << "\n}" << after )
+  else
+    return source
+  end  
+end
+
+
+unless $stdin.tty?
+  $stdout.puts( pretty( $stdin.read ) )
+  exit( 0 )
+end
+
+for path in ARGV
+  backup = path + '~'
+  input = File.read( path )
+  output = pretty( File.read( path ) )
+  open( backup, 'w' ) { | f | f.write( input ) }
+  $stderr.puts( "backed up `#{ path }' to `#{ backup }'" )
+  open( path, 'w' ) { | f | f.write( output ) }
+  $stderr.puts( "updated `#{ path }'" )
+end

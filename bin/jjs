@@ -1,0 +1,173 @@
+#! /usr/bin/ruby
+# encoding: utf-8
+
+=begin LICENSE
+
+[The "BSD licence"]
+Copyright (c) 2010-2013 Kyle Yetter
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+ 3. The name of the author may not be used to endorse or promote products
+    derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+=end
+
+$0 = 'jjs'
+
+begin
+  require 'jejune'
+rescue LoadError
+  project_top = File.expand_path( "../..", __FILE__ )
+  lib         = File.join( project_top, 'lib' )
+  $LOAD_PATH.unshift( lib )
+  require 'jejune'
+end
+
+
+require 'optparse'
+require 'yaml'
+
+
+
+input     = nil
+output    = $stdout
+load_path = []
+
+if ENV.has_key?( "JEJUNE_LIB" )
+  load_path.concat( ENV[ "JEJUNE_LIB" ].split( File::PATH_SEPARATOR ) )
+end
+
+case ARGV.first
+when /^(?:tree|ast)$/i then
+  args = ARGV[ 1 .. -1 ].map { | i | i == '-e' ? '-i' : i }
+  Jejune::Parser.main( args )
+  exit
+when /^(?:lex(?:er)?|token(?:s|ize)?)$/i then
+  args = ARGV[ 1 .. -1 ].map { | i | i == '-e' ? '-i' : i }
+  Jejune::Lexer.main( args )
+  exit
+end
+
+
+manager          = Jejune::Manager.new
+dependency_scan  = false
+
+
+OptionParser.new do | o |
+  o.on( '--input=TEXT', '-e TEXT', "inline input text" ) do | text |
+    manager.set_root_source( text << "\n", :file => '-e' )
+  end
+  
+  o.on( '--output=FILE', '-o FILE', "set the output file", "(STDOUT by default)" ) do | path |
+    output = path
+  end
+  
+  o.on( '--require FILE', '-r FILE', "require a file before processing" ) do | file |
+    manager.require!( file ).to_s
+  end
+  
+  o.on( '--tree', "parse the input and display the resulting parse tree" ) do
+    Jejune::Parser.main( ARGV )
+    exit
+  end
+  
+  o.on( '-I DIR', "add DIR to the load path" ) do | dir |
+    manager.add_to_path( dir )
+  end
+  
+  o.on( '--depends', "scan and output file dependencies without translating" ) do
+    dependency_scan = true
+  end
+  
+  #
+  o.on( '--tokens', "tokenize the input and display each token" ) do
+    Jejune::Lexer.main( ARGV )
+    exit
+  end
+  #
+  o.on( '--version', '-v', "print the current version of this program" ) do
+    puts( Jejune.version )
+    exit( 0 )
+  end
+  
+  o.on( '--verbose', '-V', "additional information printed during compilation" ) do
+    manager.verbose = true
+  end
+  
+  Jejune::Constants::BROWSERS.each do | name |
+    o.on( "--#{ name }", "specify the target browser as #{ name }" ) do
+      manager.browser = name
+    end
+  end
+  
+end.parse!( ARGV )
+
+if dependency_scan
+  require 'jejune/dependency-scanner'
+  scanner = Jejune::DependencyScanner.new( manager )
+  for source_file in ARGV
+    scanner.scan source_file
+  end
+  
+  puts YAML.dump( scanner.dependencies )
+  
+  exit 0
+end
+
+manager.root_input or manager.set_root_file( ARGF )
+
+begin
+  result = manager.translate
+  
+  #if file = manager.root_input and file.source_name and test( ?f, file.source_name )
+  #  manager.commit_dependencies( file.source_name, file.dependencies )
+  #end
+  #
+  #open( '.depends', 'w' ) do | f |
+  #  f.write( YAML.dump( manager.dependency_map ) )
+  #end
+#rescue => error
+#  if jtrace = error.jejune_trace and not jtrace.empty?
+#    puts( "[ #{ error.class } ] #{ error }" )
+#    
+#    puts( "RUBY BACKTRACE:" )
+#    for trace in error.backtrace
+#      puts( "  - #{ trace }" )
+#    end
+#    
+#    puts( "JEJUNE SOURCE TRACE:" )
+#    for trace in jtrace
+#      puts( "  - #{ trace }" )
+#    end
+#  end
+#  exit( 1 )
+end
+
+case output
+when String
+  open( output, 'w' ) { | f | f.write( result ) }
+when IO
+  output.write( result )
+else
+  raise( "BUG: output = %p -- should be an IO or String" % output )
+end
